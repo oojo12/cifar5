@@ -3,10 +3,9 @@ from argparse import ArgumentParser
 import os
 import torch
 import pytorch_lightning as pl
-from pytorch_lightning.metrics import functional as PLF
+from torchmetrics import functional as PLF
 from torch.nn import functional as F
-from flash.vision import ImageClassificationData
-from torchvision import transforms
+from flash.image import ImageClassificationData
 from torchvision import models
 import numpy as np
 
@@ -22,7 +21,7 @@ class LitClassifier(pl.LightningModule):
         )
 
     def forward(self, batch):
-        x, y = batch
+        x, y = batch["input"], batch["target"]
 
         # used only in .predict()
         y_hat = self.backbone(x)
@@ -31,7 +30,7 @@ class LitClassifier(pl.LightningModule):
         return predicted_classes
 
     def training_step(self, batch, batch_idx):
-        x, y = batch
+        x, y = batch["input"], batch["target"]
         y_hat = self.backbone(x)
         y_hat = self.classifier(y_hat)
         loss = F.cross_entropy(y_hat, y)
@@ -39,7 +38,7 @@ class LitClassifier(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x, y = batch
+        x, y = batch["input"], batch["target"]
         y_hat = self.backbone(x)
         y_hat = self.classifier(y_hat)
         loss = F.cross_entropy(y_hat, y)
@@ -48,7 +47,7 @@ class LitClassifier(pl.LightningModule):
         self.log('valid_acc', acc)
 
     def test_step(self, batch, batch_idx):
-        x, y = batch
+        x, y = batch["input"], batch["target"]
         y_hat = self.backbone(x)
         y_hat = self.classifier(y_hat)
         loss = F.cross_entropy(y_hat, y)
@@ -90,18 +89,13 @@ def cli_main():
     # ------------
     # data
     # ------------
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.4913, 0.482, 0.446], std=[0.247, 0.243, 0.261])
-    ])
-
     # in real life you would have a separate validation split
     datamodule = ImageClassificationData.from_folders(
         train_folder=args.data_dir + '/train',
-        valid_folder=args.data_dir + '/test',
+        val_folder=args.data_dir + '/test',
         test_folder=args.data_dir + '/test',
         batch_size=args.batch_size,
-        transform=transform
+        transform_kwargs={"mean": (0.4913, 0.482, 0.446), "std": (0.247, 0.243, 0.261)},
     )
 
     # ------------
